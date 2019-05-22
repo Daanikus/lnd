@@ -1088,6 +1088,9 @@ func waitForChannelUpdate(t *harnessTest, subscription graphSubscription,
 	// Create an array indicating which expected channel updates we have
 	// received.
 	found := make([]bool, len(expUpdates))
+	timer := time.NewTimer(20 * time.Second)
+	defer timer.Stop()
+
 out:
 	for {
 		select {
@@ -1141,9 +1144,10 @@ out:
 			}
 		case err := <-subscription.errChan:
 			t.Fatalf("unable to recv graph update: %v", err)
-		case <-time.After(20 * time.Second):
+		case <-timer.C:
 			t.Fatalf("did not receive channel update")
 		}
+		timer.Reset()
 	}
 }
 
@@ -5913,6 +5917,9 @@ func testBasicChannelCreationAndUpdates(net *lntest.NetworkHarness, t *harnessTe
 		)
 	}
 
+	timer := time.NewTimer(time.Second * 10)
+	defer timer.Stop()
+
 	// Since each of the channels just became open, Bob should we receive an
 	// open and an active notification for each channel.
 	var numChannelUpds int
@@ -5927,7 +5934,7 @@ func testBasicChannelCreationAndUpdates(net *lntest.NetworkHarness, t *harnessTe
 					"channel notification, got: %v", update.Type)
 			}
 			numChannelUpds++
-		case <-time.After(time.Second * 10):
+		case <-ticker.C:
 			t.Fatalf("timeout waiting for channel notifications, "+
 				"only received %d/%d chanupds", numChannelUpds,
 				numChannels)
@@ -5956,7 +5963,7 @@ func testBasicChannelCreationAndUpdates(net *lntest.NetworkHarness, t *harnessTe
 	// receive the correct channel updates in order.
 	verifyCloseUpdatesReceived := func(sub channelSubscription,
 		forceType lnrpc.ChannelCloseSummary_ClosureType) error {
-
+		timer.Reset()
 		// Ensure one inactive and one closed notification is received for each
 		// closed channel.
 		numChannelUpds := 0
@@ -5974,11 +5981,12 @@ func testBasicChannelCreationAndUpdates(net *lntest.NetworkHarness, t *harnessTe
 				numChannelUpds++
 			case err := <-sub.errChan:
 				return err
-			case <-time.After(time.Second * 10):
+			case <-timer.C:
 				return fmt.Errorf("timeout waiting for channel "+
 					"notifications, only received %d/%d "+
 					"chanupds", numChannelUpds, 2*numChannels)
 			}
+			timer.Reset()
 		}
 
 		return nil
@@ -8453,6 +8461,11 @@ func testGraphTopologyNotifications(net *lntest.NetworkHarness, t *harnessTest) 
 	// and two node announcements.
 	var numChannelUpds int
 	var numNodeAnns int
+
+	// Reuse one timer
+	timer := time.NewTimer(time.Second * 10)
+	defer timer.Stop()
+
 	for numChannelUpds < 2 && numNodeAnns < 2 {
 		select {
 		// Ensure that a new update for both created edges is properly
@@ -8496,11 +8509,12 @@ func testGraphTopologyNotifications(net *lntest.NetworkHarness, t *harnessTest) 
 			}
 		case err := <-graphSub.errChan:
 			t.Fatalf("unable to recv graph update: %v", err)
-		case <-time.After(time.Second * 10):
+		case <-timer.C:
 			t.Fatalf("timeout waiting for graph notifications, "+
 				"only received %d/2 chanupds and %d/2 nodeanns",
 				numChannelUpds, numNodeAnns)
 		}
+		timer.Reset()
 	}
 
 	_, blockHeight, err := net.Miner.Node.GetBestBlock()
@@ -8512,6 +8526,8 @@ func testGraphTopologyNotifications(net *lntest.NetworkHarness, t *harnessTest) 
 	// within the network.
 	ctxt, _ = context.WithTimeout(ctxb, channelCloseTimeout)
 	closeChannelAndAssert(ctxt, t, net, net.Alice, chanPoint, false)
+
+	timer.Reset()
 
 	// Now that the channel has been closed, we should receive a
 	// notification indicating so.
@@ -8554,10 +8570,11 @@ out:
 
 		case err := <-graphSub.errChan:
 			t.Fatalf("unable to recv graph update: %v", err)
-		case <-time.After(time.Second * 10):
+		case <-timer.C:
 			t.Fatalf("notification for channel closure not " +
 				"sent")
 		}
+		timer.Reset()
 	}
 
 	// For the final portion of the test, we'll ensure that once a new node
@@ -8602,6 +8619,9 @@ out:
 	// Bob's new node announcement, and the channel between Bob and Carol.
 	numNodeAnns = 0
 	numChannelUpds = 0
+
+	timer.Reset()
+
 	for numChannelUpds < 2 && numNodeAnns < 1 {
 		select {
 		case graphUpdate := <-graphSub.updateChan:
@@ -8641,11 +8661,12 @@ out:
 			}
 		case err := <-graphSub.errChan:
 			t.Fatalf("unable to recv graph update: %v", err)
-		case <-time.After(time.Second * 10):
+		case <-timer.C:
 			t.Fatalf("timeout waiting for graph notifications, "+
 				"only received %d/2 chanupds and %d/2 nodeanns",
 				numChannelUpds, numNodeAnns)
 		}
+		timer.Reset()
 	}
 
 	// Close the channel between Bob and Carol.
@@ -8718,6 +8739,8 @@ func testNodeAnnouncement(net *lntest.NetworkHarness, t *harnessTest) {
 
 	waitForAddrsInUpdate := func(graphSub graphSubscription,
 		nodePubKey string, targetAddrs ...string) {
+		timer := time.NewTimer(20 * time.Second)
+		defer timer.Stop()
 
 		for {
 			select {
@@ -8733,9 +8756,10 @@ func testNodeAnnouncement(net *lntest.NetworkHarness, t *harnessTest) {
 				}
 			case err := <-graphSub.errChan:
 				t.Fatalf("unable to recv graph update: %v", err)
-			case <-time.After(20 * time.Second):
+			case <-timer.C:
 				t.Fatalf("did not receive node ann update")
 			}
+			timer.Reset()
 		}
 	}
 
@@ -9120,6 +9144,9 @@ func testBidirectionalAsyncPayments(net *lntest.NetworkHarness, t *harnessTest) 
 		errChan <- nil
 	}()
 
+	timer := time.NewTimer(lntest.AsyncBenchmarkTimeout)
+	defer timer.Stop()
+
 	// Wait for Alice and Bob receive their payments, and throw and error
 	// if something goes wrong.
 	for i := 0; i < 2; i++ {
@@ -9128,10 +9155,11 @@ func testBidirectionalAsyncPayments(net *lntest.NetworkHarness, t *harnessTest) 
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
-		case <-time.After(lntest.AsyncBenchmarkTimeout):
+		case <-timer.C:
 			t.Fatalf("waiting for payments to finish too long "+
 				"(%v)", lntest.AsyncBenchmarkTimeout)
 		}
+		timer.Reset()
 	}
 
 	// Wait for Alice and Bob to receive revocations messages, and update
@@ -12415,6 +12443,8 @@ func testChannelBackupUpdates(net *lntest.NetworkHarness, t *harnessTest) {
 	// channel backup so we can compare it to the on disk state.
 	var currentBackup *lnrpc.ChanBackupSnapshot
 	assertBackupNtfns := func(numNtfns int) {
+		ticker := time.NewTicker(time.Second * 5)
+		defer ticker.Stop()
 		for i := 0; i < numNtfns; i++ {
 			select {
 			case err := <-streamErr:
@@ -12422,7 +12452,7 @@ func testChannelBackupUpdates(net *lntest.NetworkHarness, t *harnessTest) {
 
 			case currentBackup = <-backupUpdates:
 
-			case <-time.After(time.Second * 5):
+			case <-ticker.C:
 				t.Fatalf("didn't receive channel backup "+
 					"notification %v", i+1)
 			}
