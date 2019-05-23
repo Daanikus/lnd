@@ -1089,7 +1089,6 @@ func waitForChannelUpdate(t *harnessTest, subscription graphSubscription,
 	// received.
 	found := make([]bool, len(expUpdates))
 	timer := time.NewTimer(20 * time.Second)
-	defer timer.Stop()
 
 out:
 	for {
@@ -1147,8 +1146,15 @@ out:
 		case <-timer.C:
 			t.Fatalf("did not receive channel update")
 		}
-		timer.Reset()
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timer.Reset(20 * time.Second)
 	}
+	if !timer.Stop() {
+		<-timer.C
+	}
+	close(timer.C)
 }
 
 // assertNoChannelUpdates ensures that no ChannelUpdates are sent via the
@@ -5918,7 +5924,6 @@ func testBasicChannelCreationAndUpdates(net *lntest.NetworkHarness, t *harnessTe
 	}
 
 	timer := time.NewTimer(time.Second * 10)
-	defer timer.Stop()
 
 	// Since each of the channels just became open, Bob should we receive an
 	// open and an active notification for each channel.
@@ -5934,12 +5939,18 @@ func testBasicChannelCreationAndUpdates(net *lntest.NetworkHarness, t *harnessTe
 					"channel notification, got: %v", update.Type)
 			}
 			numChannelUpds++
-		case <-ticker.C:
+		case <-timer.C:
 			t.Fatalf("timeout waiting for channel notifications, "+
 				"only received %d/%d chanupds", numChannelUpds,
 				numChannels)
 		}
+
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timer.Reset(time.Second * 10)
 	}
+	
 
 	// Subscribe Alice to channel updates so we can test that both remote
 	// and local force close notifications are received correctly.
@@ -5963,7 +5974,10 @@ func testBasicChannelCreationAndUpdates(net *lntest.NetworkHarness, t *harnessTe
 	// receive the correct channel updates in order.
 	verifyCloseUpdatesReceived := func(sub channelSubscription,
 		forceType lnrpc.ChannelCloseSummary_ClosureType) error {
-		timer.Reset()
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timer.Reset(time.Second * 10)
 		// Ensure one inactive and one closed notification is received for each
 		// closed channel.
 		numChannelUpds := 0
@@ -5986,9 +6000,15 @@ func testBasicChannelCreationAndUpdates(net *lntest.NetworkHarness, t *harnessTe
 					"notifications, only received %d/%d "+
 					"chanupds", numChannelUpds, 2*numChannels)
 			}
-			timer.Reset()
+			if !timer.Stop() {
+				<-timer.C
+			}
+			timer.Reset(time.Second * 10)
 		}
-
+		if !timer.Stop() {
+			<-timer.C
+		}
+		close(timer.C)
 		return nil
 	}
 
@@ -8463,8 +8483,8 @@ func testGraphTopologyNotifications(net *lntest.NetworkHarness, t *harnessTest) 
 	var numNodeAnns int
 
 	// Reuse one timer
-	timer := time.NewTimer(time.Second * 10)
-	defer timer.Stop()
+	timerDuration := time.Duration(time.Second * 10)
+	timer := time.NewTimer(timerDuration)
 
 	for numChannelUpds < 2 && numNodeAnns < 2 {
 		select {
@@ -8514,7 +8534,11 @@ func testGraphTopologyNotifications(net *lntest.NetworkHarness, t *harnessTest) 
 				"only received %d/2 chanupds and %d/2 nodeanns",
 				numChannelUpds, numNodeAnns)
 		}
-		timer.Reset()
+
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timer.Reset(timerDuration)
 	}
 
 	_, blockHeight, err := net.Miner.Node.GetBestBlock()
@@ -8526,8 +8550,11 @@ func testGraphTopologyNotifications(net *lntest.NetworkHarness, t *harnessTest) 
 	// within the network.
 	ctxt, _ = context.WithTimeout(ctxb, channelCloseTimeout)
 	closeChannelAndAssert(ctxt, t, net, net.Alice, chanPoint, false)
-
-	timer.Reset()
+	
+	if !timer.Stop() {
+		<-timer.C
+	}
+	timer.Reset(timerDuration)
 
 	// Now that the channel has been closed, we should receive a
 	// notification indicating so.
@@ -8574,7 +8601,10 @@ out:
 			t.Fatalf("notification for channel closure not " +
 				"sent")
 		}
-		timer.Reset()
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timer.Reset(timerDuration)
 	}
 
 	// For the final portion of the test, we'll ensure that once a new node
@@ -8620,7 +8650,10 @@ out:
 	numNodeAnns = 0
 	numChannelUpds = 0
 
-	timer.Reset()
+	if !timer.Stop() {
+		<-timer.C
+	}
+	timer.Reset(timerDuration)
 
 	for numChannelUpds < 2 && numNodeAnns < 1 {
 		select {
@@ -8666,8 +8699,16 @@ out:
 				"only received %d/2 chanupds and %d/2 nodeanns",
 				numChannelUpds, numNodeAnns)
 		}
-		timer.Reset()
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timer.Reset(timerDuration)
 	}
+
+	if !timer.Stop() {
+		<-timer.C
+	}
+	close(timer.C)
 
 	// Close the channel between Bob and Carol.
 	ctxt, _ = context.WithTimeout(ctxb, channelCloseTimeout)
@@ -8740,7 +8781,7 @@ func testNodeAnnouncement(net *lntest.NetworkHarness, t *harnessTest) {
 	waitForAddrsInUpdate := func(graphSub graphSubscription,
 		nodePubKey string, targetAddrs ...string) {
 		timer := time.NewTimer(20 * time.Second)
-		defer timer.Stop()
+		
 
 		for {
 			select {
@@ -8759,9 +8800,17 @@ func testNodeAnnouncement(net *lntest.NetworkHarness, t *harnessTest) {
 			case <-timer.C:
 				t.Fatalf("did not receive node ann update")
 			}
-			timer.Reset()
+			if !timer.Stop() {
+				<-timer.C
+			}
+			timer.Reset(20 * time.Second)
 		}
 	}
+
+	if !timer.Stop() {
+		<-timer.C
+	}
+	close(timer.C)
 
 	waitForAddrsInUpdate(
 		aliceSub, dave.PubKeyStr, advertisedAddrs...,
@@ -9145,7 +9194,6 @@ func testBidirectionalAsyncPayments(net *lntest.NetworkHarness, t *harnessTest) 
 	}()
 
 	timer := time.NewTimer(lntest.AsyncBenchmarkTimeout)
-	defer timer.Stop()
 
 	// Wait for Alice and Bob receive their payments, and throw and error
 	// if something goes wrong.
@@ -9159,8 +9207,15 @@ func testBidirectionalAsyncPayments(net *lntest.NetworkHarness, t *harnessTest) 
 			t.Fatalf("waiting for payments to finish too long "+
 				"(%v)", lntest.AsyncBenchmarkTimeout)
 		}
-		timer.Reset()
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timer.Reset(lntest.AsyncBenchmarkTimeout)
 	}
+	if !timer.Stop() {
+		<-timer.C
+	}
+	close(timer.C)
 
 	// Wait for Alice and Bob to receive revocations messages, and update
 	// states, i.e. balance info.
