@@ -348,6 +348,7 @@ func TestChannelLinkBidirectionalOneHopPayments(t *testing.T) {
 	maxDelay := time.Duration(0)
 	minDelay := time.Duration(math.MaxInt64)
 	averageDelay := time.Duration(0)
+	ticker := time.NewTicker(5 * time.Minute)
 
 	// Check that alice invoice was settled and bandwidth of HTLC
 	// links was changed.
@@ -368,7 +369,7 @@ func TestChannelLinkBidirectionalOneHopPayments(t *testing.T) {
 			}
 			averageDelay += delay
 
-		case <-time.After(5 * time.Minute):
+		case <-ticker.C:
 			t.Fatalf("timeout: (%v/%v)", i+1, count)
 		}
 	}
@@ -2383,12 +2384,17 @@ func TestChannelLinkBandwidthConsistencyOverflow(t *testing.T) {
 		htlcID++
 	}
 
+	timer := time.NewTimer(15 * time.Second)
+	defer timer.Stop()
 	// The HTLCs should all be sent to the remote.
 	var msg lnwire.Message
 	for i := 0; i < numHTLCs; i++ {
 		select {
 		case msg = <-aliceMsgs:
-		case <-time.After(15 * time.Second):
+			if !timer.Stop() {
+				<-timer.C
+			}
+		case <-timer.C:
 			t.Fatalf("did not receive message %d", i)
 		}
 
@@ -2401,6 +2407,7 @@ func TestChannelLinkBandwidthConsistencyOverflow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("bob failed receiving htlc: %v", err)
 		}
+		timer.Reset(15 * time.Second)
 	}
 
 	select {
@@ -2491,13 +2498,18 @@ func TestChannelLinkBandwidthConsistencyOverflow(t *testing.T) {
 		t.Fatalf("unable to update state: %v", err)
 	}
 
+	timer := time.NewTimer(15 * time.Second)
+	defer timer.Stop()
 	// After the state update is done, Alice should start sending
 	// HTLCs from the overflow queue.
 	for i := 0; i < numOverFlowHTLCs; i++ {
 		var msg lnwire.Message
 		select {
 		case msg = <-aliceMsgs:
-		case <-time.After(15 * time.Second):
+			if !timer.Stop() {
+				<-timer.C
+			}
+		case <-timer.C:
 			t.Fatalf("did not receive message")
 		}
 
@@ -2510,6 +2522,7 @@ func TestChannelLinkBandwidthConsistencyOverflow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("bob failed receiving htlc: %v", err)
 		}
+		timer.Reset(15 * time.Second)
 	}
 
 	select {
@@ -3454,11 +3467,16 @@ func TestChannelRetransmission(t *testing.T) {
 		// to the channel link itself.
 
 		var invoice channeldb.Invoice
+		timer := time.NewTimer(time.Millisecond * 200)
+		defer timer.Stop()
 		for i := 0; i < 20; i++ {
 			select {
-			case <-time.After(time.Millisecond * 200):
+			case <-timer.C:
 			case serverErr := <-serverErr:
 				ct.Fatalf("server error: %v", serverErr)
+				if !timer.Stop() {
+					<-timer.C
+				}
 			}
 
 			// Check that alice invoice wasn't settled and
@@ -3493,6 +3511,7 @@ func TestChannelRetransmission(t *testing.T) {
 		if err != nil {
 			ct.Fatal(err)
 		}
+		timer.Reset(time.Millisecond * 200)
 	}
 
 	for _, test := range retransmissionTests {
@@ -4113,11 +4132,16 @@ func (h *persistentLinkHarness) restart(restartSwitch bool,
 // checkSent reads the links message stream and verify that the messages are
 // dequeued in the same order as provided by `pkts`.
 func (h *persistentLinkHarness) checkSent(pkts []*htlcPacket) {
+	timer := time.NewTimer(15 * time.Second)
+	defer timer.Stop()
 	for _, pkt := range pkts {
 		var msg lnwire.Message
 		select {
 		case msg = <-h.msgs:
-		case <-time.After(15 * time.Second):
+			if !timer.Stop() {
+				<-timer.C
+			}
+		case <-timer.C:
 			h.t.Fatalf("did not receive message")
 		}
 
@@ -4125,6 +4149,7 @@ func (h *persistentLinkHarness) checkSent(pkts []*htlcPacket) {
 			h.t.Fatalf("unexpected packet, want %v, got %v",
 				pkt.htlc, msg)
 		}
+		timer.Reset(15 * time.Second)
 	}
 }
 
@@ -5382,6 +5407,9 @@ func TestChannelLinkFail(t *testing.T) {
 	const chanAmt = btcutil.SatoshiPerBitcoin * 5
 	const chanReserve = 0
 
+	timer := time.NewTimer(10 * time.Second)
+	defer timer.Stop()
+
 	// Execute each test case.
 	for i, test := range testCases {
 		link, remoteChannel, _, start, cleanUp, _, err :=
@@ -5413,7 +5441,10 @@ func TestChannelLinkFail(t *testing.T) {
 		var linkErr LinkFailureError
 		select {
 		case linkErr = <-linkErrors:
-		case <-time.After(10 * time.Second):
+			if !timer.Stop() {
+				<-timer.C
+			}
+		case <-timer.C:
 			t.Fatalf("%d) Alice did not fail"+
 				"channel", i)
 		}
@@ -5429,6 +5460,7 @@ func TestChannelLinkFail(t *testing.T) {
 
 		// Clean up before starting next test case.
 		cleanUp()
+		timer.Reset(10 * time.Second)
 	}
 }
 
