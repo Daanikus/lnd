@@ -6168,8 +6168,7 @@ func waitForNTxsInMempool(miner *rpcclient.Client, n int,
 	timeout time.Duration) ([]*chainhash.Hash, error) {
 
 	breakTimeout := time.After(timeout)
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
+	timer := time.NewTimer(50 * time.Millisecond)
 
 	var err error
 	var mempool []*chainhash.Hash
@@ -6188,7 +6187,15 @@ func waitForNTxsInMempool(miner *rpcclient.Client, n int,
 				return mempool, nil
 			}
 		}
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timer.Reset(50 * time.Millisecond)
 	}
+	if !timer.Stop() {
+		<-timer.C
+	}
+	close(timer.C)
 }
 
 // testFailingChannel tests that we will fail the channel by force closing ii
@@ -8550,7 +8557,7 @@ func testGraphTopologyNotifications(net *lntest.NetworkHarness, t *harnessTest) 
 	// within the network.
 	ctxt, _ = context.WithTimeout(ctxb, channelCloseTimeout)
 	closeChannelAndAssert(ctxt, t, net, net.Alice, chanPoint, false)
-	
+
 	if !timer.Stop() {
 		<-timer.C
 	}
@@ -9365,14 +9372,13 @@ func assertSpendingTxInMempool(t *harnessTest, miner *rpcclient.Client,
 	timeout time.Duration, chanPoint wire.OutPoint) {
 
 	breakTimeout := time.After(timeout)
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
+	timer := time.NewTimer(50 * time.Millisecond)
 
 	for {
 		select {
 		case <-breakTimeout:
 			t.Fatalf("didn't find tx in mempool")
-		case <-ticker.C:
+		case <-timer.C:
 			mempool, err := miner.GetRawMempool()
 			if err != nil {
 				t.Fatalf("unable to get mempool: %v", err)
@@ -9395,7 +9401,15 @@ func assertSpendingTxInMempool(t *harnessTest, miner *rpcclient.Client,
 				}
 			}
 		}
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timer.Reset(50 * time.Millisecond)
 	}
+	if !timer.Stop() {
+		<-timer.C
+	}
+	close(timer.C)
 }
 
 func createThreeHopNetwork(t *harnessTest, net *lntest.NetworkHarness,
@@ -12498,8 +12512,7 @@ func testChannelBackupUpdates(net *lntest.NetworkHarness, t *harnessTest) {
 	// channel backup so we can compare it to the on disk state.
 	var currentBackup *lnrpc.ChanBackupSnapshot
 	assertBackupNtfns := func(numNtfns int) {
-		ticker := time.NewTicker(time.Second * 5)
-		defer ticker.Stop()
+		timer := time.NewTimer(time.Second * 5)
 		for i := 0; i < numNtfns; i++ {
 			select {
 			case err := <-streamErr:
@@ -12511,7 +12524,15 @@ func testChannelBackupUpdates(net *lntest.NetworkHarness, t *harnessTest) {
 				t.Fatalf("didn't receive channel backup "+
 					"notification %v", i+1)
 			}
+			if !timer.Stop() {
+				<-timer.C
+			}
+			timer.Reset(time.Second * 5)
 		}
+		if !timer.Stop() {
+			<-timer.C
+		}
+		close(timer.C)
 	}
 
 	// assertBackupFileState is a helper function that we'll use to compare
