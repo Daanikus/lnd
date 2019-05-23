@@ -1951,9 +1951,11 @@ func TestMultiHopPaymentForwardingEvents(t *testing.T) {
 	// We'll trigger the ticker, and wait for the events to appear in Bob's
 	// forwarding log.
 	timeout := time.After(15 * time.Second)
+	timer := time.NewTimer(50 * time.Millisecond)
 	for {
 		select {
 		case bobTicker.Force <- time.Now():
+
 		case <-time.After(1 * time.Second):
 			t.Fatalf("unable to force tick")
 		}
@@ -1969,13 +1971,17 @@ func TestMultiHopPaymentForwardingEvents(t *testing.T) {
 
 		// Otherwise wait a little bit before checking again.
 		select {
-		case <-time.After(50 * time.Millisecond):
+		case <-timer.C:
 		case <-timeout:
 			bobLog.Lock()
 			defer bobLog.Unlock()
 			t.Fatalf("expected 5 events in event log, instead "+
 				"found: %v", spew.Sdump(bobLog.events))
+			if !timer.Stop() {
+				<-timer.C
+			}
 		}
+		timer.Reset(50 * time.Millisecond)
 	}
 
 	// Send the remaining payments.

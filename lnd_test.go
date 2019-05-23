@@ -8607,11 +8607,8 @@ out:
 		case <-timer.C:
 			t.Fatalf("notification for channel closure not " +
 				"sent")
+				timer.Reset(timerDuration)
 		}
-		if !timer.Stop() {
-			<-timer.C
-		}
-		timer.Reset(timerDuration)
 	}
 
 	// For the final portion of the test, we'll ensure that once a new node

@@ -1519,11 +1519,17 @@ func TestSignatureAnnouncementRetryAtStartup(t *testing.T) {
 	// Notify that peer is now online. This should allow the proof to be
 	// sent.
 	peerChan <- remotePeer
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
 
 out:
 	for {
 		select {
 		case msg := <-sentToPeer:
+			if !timer.Stop() {
+				<-timer.C
+			}
+
 			// Since the ChannelUpdate will also be resent as it is
 			// sent reliably, we'll need to filter it out.
 			if _, ok := msg.(*lnwire.AnnounceSignatures); !ok {
@@ -1532,10 +1538,11 @@ out:
 
 			assertMessage(t, batch.localProofAnn, msg)
 			break out
-		case <-time.After(2 * time.Second):
+		case <-timer.C:
 			t.Fatalf("gossiper did not send message when peer " +
 				"came online")
 		}
+		timer.Reset(2 * time.Second)
 	}
 
 	// Now exchanging the remote channel proof, the channel announcement

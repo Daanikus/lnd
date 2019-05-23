@@ -80,6 +80,8 @@ func syncNotifierWithMiner(t *testing.T, notifier *BitcoindNotifier,
 	}
 
 	timeout := time.After(10 * time.Second)
+	timer := time.NewTimer(100 * time.Millisecond)
+	defer timer.Stop()
 	for {
 		_, bitcoindHeight, err := notifier.chainConn.GetBestBlock()
 		if err != nil {
@@ -92,10 +94,14 @@ func syncNotifierWithMiner(t *testing.T, notifier *BitcoindNotifier,
 		}
 
 		select {
-		case <-time.After(100 * time.Millisecond):
+		case <-timer.C:
 		case <-timeout:
 			t.Fatalf("timed out waiting to sync notifier")
+			if !timer.Stop() {
+				<-timer.C
+			}
 		}
+		timer.Reset(100 * time.Millisecond)
 	}
 }
 

@@ -37,6 +37,7 @@ func TestWaitingQueueThreadSafety(t *testing.T) {
 			queueLength)
 	}
 
+	ticker := time.NewTicker(2 * time.Second)
 	var b []uint64
 	for i := 0; i < numPkts; i++ {
 		q.SignalFreeSlot()
@@ -45,7 +46,7 @@ func TestWaitingQueueThreadSafety(t *testing.T) {
 		case packet := <-q.outgoingPkts:
 			b = append(b, packet.incomingHTLCID)
 
-		case <-time.After(2 * time.Second):
+		case <-ticker.C:
 			t.Fatal("timeout")
 		}
 	}

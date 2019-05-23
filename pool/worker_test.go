@@ -203,7 +203,7 @@ func pullNothing(t *testing.T, errChan chan error) {
 
 func pullParllel(t *testing.T, n int, errChan chan error) {
 	t.Helper()
-
+	ticker := time.NewTicker(time.Second)
 	for i := 0; i < n; i++ {
 		select {
 		case err := <-errChan:
@@ -211,7 +211,7 @@ func pullParllel(t *testing.T, n int, errChan chan error) {
 				t.Fatal(err)
 			}
 
-		case <-time.After(time.Second):
+		case <-ticker.C:
 			t.Fatalf("task %d was not processed in time", i)
 		}
 	}

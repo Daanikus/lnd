@@ -544,9 +544,12 @@ func TestGossipSyncerReplyShortChanIDs(t *testing.T) {
 		t.Fatalf("unable to query for chan IDs: %v", err)
 	}
 
+	timer := time.NewTimer(time.Second * 15)
+	defer timer.Stop()
+
 	for i := 0; i < len(queryReply)+1; i++ {
 		select {
-		case <-time.After(time.Second * 15):
+		case <-timer.C:
 			t.Fatalf("no msgs received")
 
 		// We should get back exactly 4 messages. The first 3 are the
@@ -575,7 +578,12 @@ func TestGossipSyncerReplyShortChanIDs(t *testing.T) {
 			case !isQueryReply && finalMsg.Complete != 1:
 				t.Fatalf("complete wasn't set")
 			}
+
+			if !timer.Stop() {
+				<-timer.C
+			}
 		}
+		timer.Reset(time.Second * 15)
 	}
 }
 
@@ -639,9 +647,11 @@ func TestGossipSyncerReplyChanRangeQuery(t *testing.T) {
 	// full, while the other is the final fragment.
 	const numExpectedChunks = 3
 	respMsgs := make([]lnwire.ShortChannelID, 0, 5)
+	timer := time.NewTimer(time.Second * 15)
+	defer timer.Stop()
 	for i := 0; i < numExpectedChunks; i++ {
 		select {
-		case <-time.After(time.Second * 15):
+		case <-timer.C:
 			t.Fatalf("no msgs received")
 
 		case msg := <-msgChan:
@@ -664,7 +674,12 @@ func TestGossipSyncerReplyChanRangeQuery(t *testing.T) {
 			}
 
 			respMsgs = append(respMsgs, rangeResp.ShortChanIDs...)
+
+			if !timer.Stop() {
+				<-timer.C
+			}
 		}
+		timer.Reset(time.Second * 15)
 	}
 
 	// We should get back exactly 5 short chan ID's, and they should match
@@ -944,6 +959,9 @@ func TestGossipSyncerSynchronizeChanIDs(t *testing.T) {
 	}
 	syncer.newChansToQuery = newChanIDs
 
+	timer := time.NewTimer(time.Second * 15)
+	defer timer.Stop()
+
 	for i := 0; i < chunkSize*2; i += 2 {
 		// With our set up complete, we'll request a sync of chan ID's.
 		done, err := syncer.synchronizeChanIDs()
@@ -959,7 +977,7 @@ func TestGossipSyncerSynchronizeChanIDs(t *testing.T) {
 
 		// We should've received a new message from the syncer.
 		select {
-		case <-time.After(time.Second * 15):
+		case <-timer.C:
 			t.Fatalf("no msgs received")
 
 		case msg := <-msgChan:
@@ -976,6 +994,10 @@ func TestGossipSyncerSynchronizeChanIDs(t *testing.T) {
 					spew.Sdump(newChanIDs[i:i+chunkSize]),
 					queryMsg.ShortChanIDs)
 			}
+
+			if !timer.Stop() {
+				<-timer.C
+			}
 		}
 
 		// With the proper message sent out, the internal state of the
@@ -986,6 +1008,8 @@ func TestGossipSyncerSynchronizeChanIDs(t *testing.T) {
 				spew.Sdump(newChanIDs[i+chunkSize:]),
 				syncer.newChansToQuery)
 		}
+
+		timer.Reset(time.Second * 15)
 	}
 
 	// At this point, only one more channel should be lingering for the
@@ -1348,6 +1372,8 @@ func TestGossipSyncerRoutineSync(t *testing.T) {
 		t.Fatalf("didn't get msg from syncer1")
 
 	case msgs := <-msgChan1:
+		timer := time.NewTimer(time.Second * 2)
+		defer timer.Stop()
 		for _, msg := range msgs {
 			// The message MUST be a QueryChannelRange message.
 			_, ok := msg.(*lnwire.QueryChannelRange)
@@ -1357,12 +1383,15 @@ func TestGossipSyncerRoutineSync(t *testing.T) {
 			}
 
 			select {
-			case <-time.After(time.Second * 2):
+			case <-timer.C:
 				t.Fatalf("node 2 didn't read msg")
 
 			case syncer2.queryMsgs <- msg:
-
+				if !timer.Stop() {
+					<-timer.C
+				}
 			}
+			timer.Reset(time.Second * 2)
 		}
 	}
 
@@ -1378,12 +1407,14 @@ func TestGossipSyncerRoutineSync(t *testing.T) {
 		chanSeries2.filterRangeResp <- syncer2Chans
 	}
 
+	timer := time.NewTimer(time.Second * 2)
+	defer timer.Stop()
 	// At this point, we'll assert that syncer2 replies with the
 	// ReplyChannelRange messages. Two replies are expected since the chunk
 	// size is 2, and we need to query for 3 channels.
 	for i := 0; i < chunkSize; i++ {
 		select {
-		case <-time.After(time.Second * 2):
+		case <-timer.C:
 			t.Fatalf("didn't get msg from syncer2")
 
 		case msgs := <-msgChan2:
@@ -1402,7 +1433,11 @@ func TestGossipSyncerRoutineSync(t *testing.T) {
 				case syncer1.gossipMsgs <- msg:
 				}
 			}
+			if !timer.Stop() {
+				<-timer.C
+			}
 		}
+		timer.Reset(time.Second * 2)
 	}
 
 	// We'll now send back a chunked response from syncer2 back to sycner1.
@@ -1433,6 +1468,7 @@ func TestGossipSyncerRoutineSync(t *testing.T) {
 		t.Fatalf("didn't get msg from syncer1")
 
 	case msgs := <-msgChan1:
+		timer := time.NewTimer(time.Second * 2)
 		for _, msg := range msgs {
 			// The message MUST be a GossipTimestampRange message.
 			_, ok := msg.(*lnwire.GossipTimestampRange)
@@ -1442,12 +1478,15 @@ func TestGossipSyncerRoutineSync(t *testing.T) {
 			}
 
 			select {
-			case <-time.After(time.Second * 2):
+			case <-timer.C:
 				t.Fatalf("node 2 didn't read msg")
 
 			case syncer2.gossipMsgs <- msg:
-
+				if !timer.Stop() {
+					<-timer.C
+				}
 			}
+			timer.Reset(time.Second * 2)
 		}
 	}
 }
@@ -1634,6 +1673,8 @@ func TestGossipSyncerAlreadySynced(t *testing.T) {
 		t.Fatalf("didn't get msg from syncer1")
 
 	case msgs := <-msgChan1:
+		timer := time.NewTimer(time.Second * 2)
+		defer timer.Stop()
 		for _, msg := range msgs {
 			// The message MUST be a GossipTimestampRange message.
 			_, ok := msg.(*lnwire.GossipTimestampRange)
@@ -1643,12 +1684,15 @@ func TestGossipSyncerAlreadySynced(t *testing.T) {
 			}
 
 			select {
-			case <-time.After(time.Second * 2):
+			case <-timer.C:
 				t.Fatalf("node 2 didn't read msg")
 
 			case syncer2.gossipMsgs <- msg:
-
+				if !timer.Stop() {
+					<-timer.C
+				}
 			}
+			timer.Reset(time.Second * 2)
 		}
 	}
 	select {

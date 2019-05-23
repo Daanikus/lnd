@@ -58,7 +58,7 @@ func NewMockNotifier(t *testing.T) *MockNotifier {
 // NotifyEpoch simulates a new epoch arriving.
 func (m *MockNotifier) NotifyEpoch(height int32) {
 	m.t.Helper()
-
+	ticker := time.NewTicker(defaultTestTimeout)
 	for epochChan, chanHeight := range m.epochChan {
 		// Only send notifications if the height is greater than the
 		// height the caller passed into the register call.
@@ -72,7 +72,7 @@ func (m *MockNotifier) NotifyEpoch(height int32) {
 		case epochChan <- &chainntnfs.BlockEpoch{
 			Height: height,
 		}:
-		case <-time.After(defaultTestTimeout):
+		case <-ticker.C:
 			m.t.Fatal("epoch event not consumed")
 		}
 	}
