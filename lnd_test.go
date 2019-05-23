@@ -1154,7 +1154,7 @@ out:
 	if !timer.Stop() {
 		<-timer.C
 	}
-	close(timer.C)
+	 
 }
 
 // assertNoChannelUpdates ensures that no ChannelUpdates are sent via the
@@ -6008,7 +6008,7 @@ func testBasicChannelCreationAndUpdates(net *lntest.NetworkHarness, t *harnessTe
 		if !timer.Stop() {
 			<-timer.C
 		}
-		close(timer.C)
+		 
 		return nil
 	}
 
@@ -6195,7 +6195,7 @@ func waitForNTxsInMempool(miner *rpcclient.Client, n int,
 	if !timer.Stop() {
 		<-timer.C
 	}
-	close(timer.C)
+	 
 }
 
 // testFailingChannel tests that we will fail the channel by force closing ii
@@ -8715,7 +8715,6 @@ out:
 	if !timer.Stop() {
 		<-timer.C
 	}
-	close(timer.C)
 
 	// Close the channel between Bob and Carol.
 	ctxt, _ = context.WithTimeout(ctxb, channelCloseTimeout)
@@ -8817,7 +8816,7 @@ func testNodeAnnouncement(net *lntest.NetworkHarness, t *harnessTest) {
 	if !timer.Stop() {
 		<-timer.C
 	}
-	close(timer.C)
+	 
 
 	waitForAddrsInUpdate(
 		aliceSub, dave.PubKeyStr, advertisedAddrs...,
@@ -9222,7 +9221,7 @@ func testBidirectionalAsyncPayments(net *lntest.NetworkHarness, t *harnessTest) 
 	if !timer.Stop() {
 		<-timer.C
 	}
-	close(timer.C)
+	 
 
 	// Wait for Alice and Bob to receive revocations messages, and update
 	// states, i.e. balance info.
@@ -9409,7 +9408,7 @@ func assertSpendingTxInMempool(t *harnessTest, miner *rpcclient.Client,
 	if !timer.Stop() {
 		<-timer.C
 	}
-	close(timer.C)
+	 
 }
 
 func createThreeHopNetwork(t *harnessTest, net *lntest.NetworkHarness,
@@ -12532,7 +12531,7 @@ func testChannelBackupUpdates(net *lntest.NetworkHarness, t *harnessTest) {
 		if !timer.Stop() {
 			<-timer.C
 		}
-		close(timer.C)
+		 
 	}
 
 	// assertBackupFileState is a helper function that we'll use to compare
