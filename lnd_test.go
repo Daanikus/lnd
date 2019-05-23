@@ -6177,7 +6177,7 @@ func waitForNTxsInMempool(miner *rpcclient.Client, n int,
 		case <-breakTimeout:
 			return nil, fmt.Errorf("wanted %v, found %v txs "+
 				"in mempool: %v", n, len(mempool), mempool)
-		case <-ticker.C:
+		case <-timer.C:
 			mempool, err = miner.GetRawMempool()
 			if err != nil {
 				return nil, err
